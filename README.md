@@ -16,6 +16,12 @@ npm i -g escpos-emulator     # or install globally
 escpos-emulator              # then run anytime
 ```
 
+### Docker
+
+```bash
+docker run -p 9100:9100 -p 3000:3000 ghcr.io/lezram/escpos-emulator
+```
+
 ## Quick Start (from source)
 
 ```bash
