@@ -1,0 +1,48 @@
+{
+  "name": "escpos-emulator",
+  "version": "0.1.0",
+  "description": "ESC/POS thermal receipt printer emulator with live HTML preview and REST API for testing",
+  "license": "MIT",
+  "author": "lezram",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lezram/escpos-emulator.git"
+  },
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "escpos-emulator": "dist/index.js"
+  },
+  "scripts": {
+    "dev": "tsx --watch src/index.ts",
+    "build": "tsc && cp -r src/html dist/html",
+    "start": "node dist/index.js",
+    "test-print": "tsx test-print.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  },
+  "keywords": [
+    "escpos",
+    "esc-pos",
+    "receipt",
+    "printer",
+    "emulator",
+    "thermal",
+    "epson",
+    "tm-m30"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESC/POS Emulator</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, sans-serif; display: flex; height: 100vh; background: #1a1a1a; color: #eee; }
+
+#sidebar {
+  width: 260px; min-width: 260px; background: #222; border-right: 1px solid #333;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+#sidebar h2 { padding: 12px 16px; font-size: 14px; border-bottom: 1px solid #333; color: #aaa; }
+#receipt-list {
+  flex: 1; overflow-y: auto; padding: 4px 0;
+}
+.receipt-item {
+  padding: 8px 16px; cursor: pointer; border-bottom: 1px solid #2a2a2a;
+  font-size: 12px; transition: background 0.1s;
+}
+.receipt-item:hover { background: #2a2a2a; }
+.receipt-item.active { background: #335; border-left: 3px solid #58f; }
+.receipt-item .time { color: #888; }
+.receipt-item .preview { color: #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+
+#main {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  padding: 24px; overflow-y: auto; background: #2a2a2a;
+}
+#status {
+  font-size: 12px; color: #888; margin-bottom: 16px;
+}
+#status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+#status .dot.connected { background: #4c4; }
+#status .dot.disconnected { background: #c44; }
+
+#receipt-paper {
+  background: #fff; color: #000; padding: 16px 1.5ch; min-height: 100px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.4); border-radius: 2px;
+  font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4;
+  overflow-x: hidden; width: fit-content;
+}
+#receipt-paper .line { min-height: 1.4em; display: flex; flex-wrap: nowrap; align-items: baseline; }
+#receipt-paper .line.center { justify-content: center; }
+#receipt-paper .line.right { justify-content: flex-end; }
+#receipt-paper .seg { white-space: pre; }
+#receipt-paper .seg.bold { font-weight: bold; }
+#receipt-paper .seg.underline-1 { text-decoration: underline; }
+#receipt-paper .seg.underline-2 { text-decoration: underline; text-decoration-style: double; }
+#receipt-paper .seg.reverse { background: #000; color: #fff; }
+#receipt-paper .seg.w2 { font-size: 26px; }
+#receipt-paper .seg.w3 { font-size: 39px; }
+#receipt-paper .seg.w4 { font-size: 52px; }
+#receipt-paper .seg.h2 { line-height: 2.8; }
+#receipt-paper .seg.h3 { line-height: 4.2; }
+#receipt-paper .seg.h4 { line-height: 5.6; }
+#receipt-paper .seg.font-B { font-size: 11px; }
+
+#empty-state { color: #666; font-style: italic; padding: 40px; text-align: center; }
+
+#toolbar { padding: 8px 16px; border-top: 1px solid #333; display: flex; flex-direction: column; gap: 8px; }
+#toolbar button {
+  background: #444; color: #ddd; border: none; padding: 6px 12px; border-radius: 4px;
+  cursor: pointer; font-size: 12px;
+}
+#toolbar button:hover { background: #555; }
+#toolbar label { color: #bbb; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h2>Receipts <span id="count">(0)</span></h2>
+  <div id="receipt-list"></div>
+  <div id="toolbar">
+    <label><input type="checkbox" id="paper-reduction" checked onchange="onPaperReductionChange()"> Paper reduction</label>
+    <button onclick="clearAll()">Clear All</button>
+  </div>
+</div>
+
+<div id="main">
+  <div id="status"><span class="dot disconnected" id="dot"></span><span id="status-text">Connecting...</span></div>
+  <div id="receipt-paper"><div id="empty-state">Waiting for receipts...</div></div>
+</div>
+
+<script>
+const receipts = [];
+let selectedId = null;
+let autoSelect = true;
+
+// --- WebSocket ---
+let ws;
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}`);
+  ws.onopen = () => {
+    document.getElementById('dot').className = 'dot connected';
+    document.getElementById('status-text').textContent = 'Connected';
+  };
+  ws.onclose = () => {
+    document.getElementById('dot').className = 'dot disconnected';
+    document.getElementById('status-text').textContent = 'Disconnected — reconnecting...';
+    setTimeout(connect, 2000);
+  };
+  ws.onmessage = (e) => {
+    const receipt = JSON.parse(e.data);
+    addReceipt(receipt);
+  };
+}
+
+// --- Data ---
+function addReceipt(receipt) {
+  // Deduplicate
+  if (receipts.find(r => r.id === receipt.id)) return;
+  receipts.push(receipt);
+  document.getElementById('count').textContent = `(${receipts.length})`;
+  renderList();
+  if (autoSelect) {
+    selectedId = receipt.id;
+    renderReceipt(receipt);
+    highlightActive();
+  }
+}
+
+async function loadHistory() {
+  try {
+    const res = await fetch('/api/receipts');
+    const data = await res.json();
+    for (const r of data) addReceipt(r);
+  } catch (e) { /* ignore */ }
+}
+
+async function clearAll() {
+  await fetch('/api/receipts', { method: 'DELETE' });
+  receipts.length = 0;
+  selectedId = null;
+  autoSelect = true;
+  document.getElementById('count').textContent = '(0)';
+  renderList();
+  document.getElementById('receipt-paper').innerHTML = '<div id="empty-state">Waiting for receipts...</div>';
+}
+
+// --- Rendering ---
+function renderList() {
+  const list = document.getElementById('receipt-list');
+  list.innerHTML = '';
+  for (let i = receipts.length - 1; i >= 0; i--) {
+    const r = receipts[i];
+    const div = document.createElement('div');
+    div.className = 'receipt-item' + (r.id === selectedId ? ' active' : '');
+    div.dataset.id = r.id;
+    const time = new Date(r.receivedAt).toLocaleTimeString();
+    const preview = getPreviewText(r) || '(empty)';
+    div.innerHTML = `<div class="time">${time}</div><div class="preview">${escHtml(preview)}</div>`;
+    div.onclick = () => {
+      autoSelect = false;
+      selectedId = r.id;
+      renderReceipt(r);
+      highlightActive();
+    };
+    list.appendChild(div);
+  }
+}
+
+function highlightActive() {
+  document.querySelectorAll('.receipt-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.id === selectedId);
+  });
+}
+
+function isBlankLine(line) {
+  const segs = line.segments || [];
+  if (segs.length === 0) return true;
+  return segs.every(s => !s.text || !s.text.trim());
+}
+
+function renderReceipt(receipt) {
+  const paper = document.getElementById('receipt-paper');
+  if (!receipt || !receipt.lines.length) {
+    paper.innerHTML = '<div id="empty-state">Empty receipt</div>';
+    return;
+  }
+  const paperReduction = document.getElementById('paper-reduction').checked;
+  paper.innerHTML = '';
+  for (const line of receipt.lines) {
+    if (paperReduction && isBlankLine(line)) continue;
+    const div = document.createElement('div');
+    div.className = 'line';
+    if (line.align === 'center') div.classList.add('center');
+    if (line.align === 'right') div.classList.add('right');
+
+    const segments = line.segments || [];
+    if (segments.length === 0 || (segments.length === 1 && !segments[0].text)) {
+      div.innerHTML = '\u00A0';
+    } else {
+      for (const seg of segments) {
+        const span = document.createElement('span');
+        span.className = 'seg';
+        if (seg.bold) span.classList.add('bold');
+        if (seg.underline === 1) span.classList.add('underline-1');
+        if (seg.underline === 2) span.classList.add('underline-2');
+        if (seg.reverse) span.classList.add('reverse');
+        if (seg.width > 1) span.classList.add('w' + Math.min(seg.width, 4));
+        if (seg.height > 1) span.classList.add('h' + Math.min(seg.height, 4));
+        if (seg.font === 'B') span.classList.add('font-B');
+        span.textContent = seg.text;
+        div.appendChild(span);
+      }
+    }
+    paper.appendChild(div);
+  }
+}
+
+function getPreviewText(receipt) {
+  for (const line of receipt.lines) {
+    const segs = line.segments || [];
+    const text = segs.map(s => s.text).join('').trim();
+    if (text) return text.slice(0, 30);
+  }
+  return '';
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function onPaperReductionChange() {
+  const r = receipts.find(r => r.id === selectedId);
+  if (r) renderReceipt(r);
+}
+
+// --- Init ---
+loadHistory();
+connect();
+</script>
+</body>
+</html>
