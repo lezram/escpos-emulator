@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { type ReceiptStore } from './receipt-store.js';
 import { type Receipt } from './receipt.js';
+import { type PrinterState } from './tcp-server.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const HTML_PATH = path.join(__dirname, 'html', 'index.html');
@@ -22,7 +23,9 @@ function json(res: http.ServerResponse, data: unknown, status = 200): void {
   res.end(JSON.stringify(data));
 }
 
-export function createHttpServer(store: ReceiptStore, port: number): http.Server {
+export function createHttpServer(store: ReceiptStore, port: number, printerState: PrinterState): http.Server {
+  const clients = new Set<WebSocket>();
+
   const server = http.createServer((req, res) => {
     const url = new URL(req.url || '/', `http://localhost:${port}`);
     const method = req.method || 'GET';
@@ -31,7 +34,7 @@ export function createHttpServer(store: ReceiptStore, port: number): http.Server
     if (method === 'OPTIONS') {
       res.writeHead(204, {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, DELETE, OPTIONS',
+        'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
       });
       res.end();
@@ -72,13 +75,28 @@ export function createHttpServer(store: ReceiptStore, port: number): http.Server
       return;
     }
 
+    if (url.pathname === '/api/printer/status' && method === 'GET') {
+      json(res, { enabled: printerState.enabled });
+      return;
+    }
+
+    if (url.pathname === '/api/printer/toggle' && method === 'POST') {
+      printerState.setEnabled(!printerState.enabled);
+      console.log(`[http] Printer ${printerState.enabled ? 'ONLINE' : 'OFFLINE'}`);
+      const msg = JSON.stringify({ type: 'printer-status', enabled: printerState.enabled });
+      for (const ws of clients) {
+        if (ws.readyState === ws.OPEN) ws.send(msg);
+      }
+      json(res, { enabled: printerState.enabled });
+      return;
+    }
+
     res.writeHead(404);
     res.end('Not found');
   });
 
   // WebSocket
   const wss = new WebSocketServer({ server });
-  const clients = new Set<WebSocket>();
 
   wss.on('connection', (ws) => {
     clients.add(ws);
@@ -86,7 +104,7 @@ export function createHttpServer(store: ReceiptStore, port: number): http.Server
   });
 
   store.on('receipt', (receipt: Receipt) => {
-    const msg = JSON.stringify(receipt);
+    const msg = JSON.stringify({ type: 'receipt', receipt });
     for (const ws of clients) {
       if (ws.readyState === ws.OPEN) {
         ws.send(msg);

@@ -24,6 +24,8 @@ body { font-family: system-ui, sans-serif; display: flex; height: 100vh; backgro
 .receipt-item.active { background: #335; border-left: 3px solid #58f; }
 .receipt-item .time { color: #888; }
 .receipt-item .preview { color: #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.receipt-item.unread { border-left: 3px solid #f80; }
+.receipt-item.unread .time::before { content: '●'; color: #f80; margin-right: 6px; }
 
 #main {
   flex: 1; display: flex; flex-direction: column; align-items: center;
@@ -66,6 +68,8 @@ body { font-family: system-ui, sans-serif; display: flex; height: 100vh; backgro
   cursor: pointer; font-size: 12px;
 }
 #toolbar button:hover { background: #555; }
+#toolbar button.printer-off { background: #833; color: #fcc; }
+#toolbar button.printer-off:hover { background: #a44; }
 #toolbar label { color: #bbb; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
 </style>
 </head>
@@ -76,6 +80,7 @@ body { font-family: system-ui, sans-serif; display: flex; height: 100vh; backgro
   <div id="receipt-list"></div>
   <div id="toolbar">
     <label><input type="checkbox" id="paper-reduction" checked onchange="onPaperReductionChange()"> Paper reduction</label>
+    <button id="printer-toggle" onclick="togglePrinter()">🟢 Printer Online</button>
     <button onclick="clearAll()">Clear All</button>
   </div>
 </div>
@@ -89,6 +94,8 @@ body { font-family: system-ui, sans-serif; display: flex; height: 100vh; backgro
 const receipts = [];
 let selectedId = null;
 let autoSelect = true;
+const readIds = new Set();
+let printerEnabled = true;
 
 // --- WebSocket ---
 let ws;
@@ -105,8 +112,13 @@ function connect() {
     setTimeout(connect, 2000);
   };
   ws.onmessage = (e) => {
-    const receipt = JSON.parse(e.data);
-    addReceipt(receipt);
+    const data = JSON.parse(e.data);
+    if (data.type === 'receipt') {
+      addReceipt(data.receipt);
+    } else if (data.type === 'printer-status') {
+      printerEnabled = data.enabled;
+      updatePrinterButton();
+    }
   };
 }
 
@@ -119,6 +131,7 @@ function addReceipt(receipt) {
   renderList();
   if (autoSelect) {
     selectedId = receipt.id;
+    readIds.add(receipt.id);
     renderReceipt(receipt);
     highlightActive();
   }
@@ -128,7 +141,10 @@ async function loadHistory() {
   try {
     const res = await fetch('/api/receipts');
     const data = await res.json();
-    for (const r of data) addReceipt(r);
+    for (const r of data) {
+      readIds.add(r.id);
+      addReceipt(r);
+    }
   } catch (e) { /* ignore */ }
 }
 
@@ -148,8 +164,9 @@ function renderList() {
   list.innerHTML = '';
   for (let i = receipts.length - 1; i >= 0; i--) {
     const r = receipts[i];
+    const isUnread = !readIds.has(r.id);
     const div = document.createElement('div');
-    div.className = 'receipt-item' + (r.id === selectedId ? ' active' : '');
+    div.className = 'receipt-item' + (r.id === selectedId ? ' active' : '') + (isUnread ? ' unread' : '');
     div.dataset.id = r.id;
     const time = new Date(r.receivedAt).toLocaleTimeString();
     const preview = getPreviewText(r) || '(empty)';
@@ -157,8 +174,10 @@ function renderList() {
     div.onclick = () => {
       autoSelect = false;
       selectedId = r.id;
+      readIds.add(r.id);
       renderReceipt(r);
       highlightActive();
+      renderList();
     };
     list.appendChild(div);
   }
@@ -231,8 +250,39 @@ function onPaperReductionChange() {
   if (r) renderReceipt(r);
 }
 
+// --- Printer toggle ---
+function updatePrinterButton() {
+  const btn = document.getElementById('printer-toggle');
+  if (printerEnabled) {
+    btn.textContent = '🟢 Printer Online';
+    btn.classList.remove('printer-off');
+  } else {
+    btn.textContent = '🔴 Printer Offline';
+    btn.classList.add('printer-off');
+  }
+}
+
+async function togglePrinter() {
+  try {
+    const res = await fetch('/api/printer/toggle', { method: 'POST' });
+    const data = await res.json();
+    printerEnabled = data.enabled;
+    updatePrinterButton();
+  } catch (e) { /* ignore */ }
+}
+
+async function loadPrinterStatus() {
+  try {
+    const res = await fetch('/api/printer/status');
+    const data = await res.json();
+    printerEnabled = data.enabled;
+    updatePrinterButton();
+  } catch (e) { /* ignore */ }
+}
+
 // --- Init ---
 loadHistory();
+loadPrinterStatus();
 connect();
 </script>
 </body>

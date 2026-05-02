@@ -14,5 +14,5 @@ const store = new ReceiptStore();
 console.log(`[escpos-emulator] Emulating: ${model.vendor} ${model.name}`);
 console.log(`[escpos-emulator] Paper: ${model.paperWidthMm}mm, Font A: ${model.fonts['A']?.charsPerLine} chars/line`);
 
-createTcpServer(model, store, TCP_PORT);
-createHttpServer(store, HTTP_PORT);
+const { state: printerState } = createTcpServer(model, store, TCP_PORT);
+createHttpServer(store, HTTP_PORT, printerState);
