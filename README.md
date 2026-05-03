@@ -1,3 +1,5 @@
+[![npm version](https://img.shields.io/npm/v/escpos-emulator.svg)](https://www.npmjs.com/package/escpos-emulator)
+
 # escpos-emulator
 
 ![ESC/POS Emulator](./assets/escpos_emulator.jpg)
