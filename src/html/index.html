@@ -8,35 +8,95 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: system-ui, sans-serif; display: flex; height: 100vh; background: #1a1a1a; color: #eee; }
 
+/* ── Sidebar ── */
 #sidebar {
-  width: 260px; min-width: 260px; background: #222; border-right: 1px solid #333;
+  width: 280px; min-width: 280px; background: #222; border-right: 1px solid #333;
   display: flex; flex-direction: column; overflow: hidden;
 }
-#sidebar h2 { padding: 12px 16px; font-size: 14px; border-bottom: 1px solid #333; color: #aaa; }
-#receipt-list {
-  flex: 1; overflow-y: auto; padding: 4px 0;
+
+/* Filter bar */
+#filter-bar {
+  display: flex; flex-direction: column; gap: 3px; padding: 8px; border-bottom: 1px solid #333;
 }
+.ftab {
+  padding: 5px 10px; font-size: 12px; cursor: pointer; border-radius: 4px;
+  background: #2a2a2a; color: var(--pc, #bbb); border: 1px solid #333;
+  display: flex; align-items: center; gap: 6px; user-select: none;
+  transition: background 0.1s;
+}
+.ftab:hover { background: #333; }
+.ftab.active { background: color-mix(in srgb, var(--pc, #58f) 12%, #252535); border-color: var(--pc, #58f); color: var(--pc, #eee); }
+.ftab.offline { color: #666; }
+.ftab-count { font-size: 10px; color: #666; background: #333; padding: 1px 4px; border-radius: 8px; }
+.ftab.active .ftab-count { color: #999; background: #3a3a4a; }
+
+/* Online/offline dot inside printer tabs */
+.pdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.pdot.on { background: #4c4; }
+.pdot.off { background: #c44; }
+
+/* Port label */
+.ptab-port { font-size: 10px; color: #555; }
+.ftab.active .ptab-port { color: #777; }
+
+/* Per-printer power toggle */
+.ptab-power {
+  background: none; border: 1px solid #444; cursor: pointer; color: #666;
+  font-size: 11px; line-height: 1.3; padding: 1px 4px; border-radius: 3px;
+  margin-left: 2px; flex-shrink: 0;
+}
+.ptab-power:hover { color: #ccc; border-color: #888; background: rgba(255,255,255,0.07); }
+.ptab-power.on  { color: #4c4; border-color: #3a3; }
+.ptab-power.off { color: #c44; border-color: #944; }
+
+/* List header */
+#list-header {
+  padding: 8px 16px; font-size: 13px; color: #aaa; border-bottom: 1px solid #333; flex-shrink: 0;
+}
+
+/* Receipt list */
+#receipt-list { flex: 1; overflow-y: auto; padding: 4px 0; }
 .receipt-item {
   padding: 8px 16px; cursor: pointer; border-bottom: 1px solid #2a2a2a;
   font-size: 12px; transition: background 0.1s;
+  border-left: 3px solid var(--pc, transparent);
 }
-.receipt-item:hover { background: #2a2a2a; }
-.receipt-item.active { background: #335; border-left: 3px solid #58f; }
-.receipt-item .time { color: #888; }
-.receipt-item .preview { color: #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-.receipt-item.unread { border-left: 3px solid #f80; }
-.receipt-item.unread .time::before { content: '●'; color: #f80; margin-right: 6px; }
+.receipt-item:hover { background: #2d2d2d; }
+.receipt-item.active { background: #252535; }
+.ri-time { color: #888; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.ri-preview { color: #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.receipt-item.unread .ri-time::before { content: '●'; color: var(--pc, #f80); flex-shrink: 0; }
+/* Read items: fade the color accents so unread ones pop */
+.receipt-item:not(.unread) { border-left-color: color-mix(in srgb, var(--pc, transparent) 22%, transparent); }
+.receipt-item:not(.unread) .ri-preview { color: #777; }
+.receipt-item:not(.unread) .pbadge { opacity: 0.38; }
+/* Restore full color when the read item is selected */
+.receipt-item.active { border-left-color: var(--pc, #58f); }
+.receipt-item.active .ri-preview { color: #ccc; }
+.receipt-item.active .pbadge { opacity: 1; }
 
+/* Printer badge shown in All view */
+.pbadge {
+  font-size: 10px; padding: 1px 5px; border-radius: 3px; border: 1px solid;
+  font-weight: 500; flex-shrink: 0; line-height: 1.6;
+}
+
+/* ── Main area ── */
 #main {
   flex: 1; display: flex; flex-direction: column; align-items: center;
   padding: 24px; overflow-y: auto; background: #2a2a2a;
 }
-#status {
-  font-size: 12px; color: #888; margin-bottom: 16px;
-}
+#status { font-size: 12px; color: #888; margin-bottom: 16px; }
 #status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
 #status .dot.connected { background: #4c4; }
 #status .dot.disconnected { background: #c44; }
+
+/* Thin receipt origin strip */
+#receipt-origin {
+  font-size: 12px; color: #888; margin-bottom: 8px; height: 18px;
+  display: flex; align-items: center; gap: 6px;
+}
+#receipt-origin .ro-dot { width: 8px; height: 8px; border-radius: 50%; }
 
 #receipt-paper {
   background: #fff; color: #000; padding: 16px 1.5ch; min-height: 100px;
@@ -62,46 +122,195 @@ body { font-family: system-ui, sans-serif; display: flex; height: 100vh; backgro
 
 #empty-state { color: #666; font-style: italic; padding: 40px; text-align: center; }
 
+/* Toolbar */
 #toolbar { padding: 8px 16px; border-top: 1px solid #333; display: flex; flex-direction: column; gap: 8px; }
 #toolbar button {
   background: #444; color: #ddd; border: none; padding: 6px 12px; border-radius: 4px;
-  cursor: pointer; font-size: 12px;
+  cursor: pointer; font-size: 12px; text-align: left;
 }
 #toolbar button:hover { background: #555; }
-#toolbar button.printer-off { background: #833; color: #fcc; }
-#toolbar button.printer-off:hover { background: #a44; }
 #toolbar label { color: #bbb; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+#repo-links {
+  padding: 6px 16px; border-top: 1px solid #2a2a2a;
+  display: flex; gap: 10px; flex-shrink: 0;
+}
+#repo-links a { font-size: 11px; color: #555; text-decoration: none; }
+#repo-links a:hover { color: #999; text-decoration: underline; }
 </style>
 </head>
 <body>
 
 <div id="sidebar">
-  <h2>Receipts <span id="count">(0)</span></h2>
+  <div id="filter-bar"></div>
+  <div id="list-header">Receipts <span id="count">(0)</span></div>
   <div id="receipt-list"></div>
   <div id="toolbar">
     <label><input type="checkbox" id="paper-reduction" checked onchange="onPaperReductionChange()"> Paper reduction</label>
-    <button id="printer-toggle" onclick="togglePrinter()">🟢 Printer Online</button>
-    <button onclick="clearAll()">Clear All</button>
+    <button id="clear-btn" onclick="clearReceipts()">Clear All</button>
+  </div>
+  <div id="repo-links">
+    <a href="https://github.com/lezram/escpos-emulator" target="_blank">GitHub</a>
+    <a href="https://github.com/lezram/escpos-emulator/issues" target="_blank">Report issue</a>
   </div>
 </div>
 
 <div id="main">
   <div id="status"><span class="dot disconnected" id="dot"></span><span id="status-text">Connecting...</span></div>
+  <div id="receipt-origin"></div>
   <div id="receipt-paper"><div id="empty-state">Waiting for receipts...</div></div>
 </div>
 
 <script>
-const receipts = [];
+const COLORS = ['#5b8fff','#ff8c42','#4caf91','#c97fd4','#f5c842','#e05c5c','#4dc4e0','#a0d468'];
+
+// printerMap: id -> { id, name, tcpPort, enabled, color, receipts[] }
+const printerMap = new Map();
+let activeFilter = 'all'; // 'all' | printerId
 let selectedId = null;
 let autoSelect = true;
 const readIds = new Set();
-let printerEnabled = true;
 
-// --- WebSocket ---
+// ── Helpers ──
+
+function getFilteredItems() {
+  if (activeFilter === 'all') {
+    const all = [];
+    for (const p of printerMap.values()) {
+      for (const r of p.receipts) all.push({ r, p });
+    }
+    all.sort((a, b) => new Date(b.r.receivedAt) - new Date(a.r.receivedAt));
+    return all;
+  }
+  const p = printerMap.get(activeFilter);
+  if (!p) return [];
+  return [...p.receipts].reverse().map(r => ({ r, p }));
+}
+
+function findReceiptEntry(id) {
+  for (const p of printerMap.values()) {
+    const r = p.receipts.find(r => r.id === id);
+    if (r) return { r, p };
+  }
+  return null;
+}
+
+// ── Filter bar ──
+
+function renderFilterBar() {
+  const bar = document.getElementById('filter-bar');
+  bar.innerHTML = '';
+
+  // All tab
+  const totalCount = [...printerMap.values()].reduce((s, p) => s + p.receipts.length, 0);
+  const allTab = document.createElement('div');
+  allTab.className = 'ftab' + (activeFilter === 'all' ? ' active' : '');
+  allTab.onclick = () => setFilter('all');
+  allTab.appendChild(document.createTextNode('All '));
+  const allBadge = document.createElement('span');
+  allBadge.className = 'ftab-count';
+  allBadge.style.marginLeft = 'auto';
+  allBadge.textContent = totalCount;
+  allTab.appendChild(allBadge);
+  bar.appendChild(allTab);
+
+  // Printer tabs
+  for (const p of printerMap.values()) {
+    const tab = document.createElement('div');
+    tab.className = 'ftab' + (activeFilter === p.id ? ' active' : '') + (p.enabled ? '' : ' offline');
+    tab.style.setProperty('--pc', p.color);
+
+    const dot = document.createElement('span');
+    dot.className = 'pdot ' + (p.enabled ? 'on' : 'off');
+
+    const label = document.createElement('span');
+    label.style.flex = '1';
+    label.textContent = p.name;
+
+    const port = document.createElement('span');
+    port.className = 'ptab-port';
+    port.textContent = ':' + p.tcpPort;
+
+    const countBadge = document.createElement('span');
+    countBadge.className = 'ftab-count';
+    countBadge.textContent = p.receipts.length;
+
+    // Power toggle — stopPropagation so it doesn't trigger setFilter
+    const power = document.createElement('button');
+    power.className = 'ptab-power ' + (p.enabled ? 'on' : 'off');
+    power.title = p.enabled ? 'Take offline' : 'Bring online';
+    power.textContent = '⏻';
+    power.onclick = (e) => { e.stopPropagation(); togglePrinter(p.id); };
+
+    tab.appendChild(dot);
+    tab.appendChild(label);
+    tab.appendChild(port);
+    tab.appendChild(countBadge);
+    tab.appendChild(power);
+    tab.onclick = () => setFilter(p.id);
+    bar.appendChild(tab);
+  }
+}
+
+function setFilter(id) {
+  activeFilter = id;
+  autoSelect = true;
+  selectedId = null;
+  const items = getFilteredItems();
+  if (items.length > 0) {
+    selectedId = items[0].r.id;
+    renderReceipt(items[0].r, items[0].p);
+  } else {
+    document.getElementById('receipt-paper').innerHTML = '<div id="empty-state">Waiting for receipts...</div>';
+    clearOrigin();
+  }
+  renderFilterBar();
+  renderList();
+  updateCount();
+  updateClearBtn();
+}
+
+// ── Init ──
+
+async function init() {
+  try {
+    const res = await fetch('/api/printers');
+    const list = await res.json();
+    list.forEach((p, i) => printerMap.set(p.id, { ...p, color: COLORS[i % COLORS.length], receipts: [] }));
+    renderFilterBar();
+    for (const p of list) await loadHistory(p.id);
+    updateClearBtn();
+  } catch(e) { /* ignore */ }
+}
+
+async function loadHistory(printerId) {
+  try {
+    const res = await fetch('/api/printers/' + encodeURIComponent(printerId) + '/receipts');
+    const data = await res.json();
+    const printer = printerMap.get(printerId);
+    if (!printer) return;
+    for (const r of data) {
+      readIds.add(r.id);
+      if (!printer.receipts.find(x => x.id === r.id)) printer.receipts.push(r);
+    }
+    renderFilterBar();
+    renderList();
+    updateCount();
+    if (!selectedId) {
+      const items = getFilteredItems();
+      if (items.length > 0) {
+        selectedId = items[0].r.id;
+        renderReceipt(items[0].r, items[0].p);
+      }
+    }
+  } catch(e) { /* ignore */ }
+}
+
+// ── WebSocket ──
+
 let ws;
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(`${proto}//${location.host}`);
+  ws = new WebSocket(proto + '//' + location.host);
   ws.onopen = () => {
     document.getElementById('dot').className = 'dot connected';
     document.getElementById('status-text').textContent = 'Connected';
@@ -114,68 +323,104 @@ function connect() {
   ws.onmessage = (e) => {
     const data = JSON.parse(e.data);
     if (data.type === 'receipt') {
-      addReceipt(data.receipt);
+      addReceipt(data.printerId, data.receipt);
     } else if (data.type === 'printer-status') {
-      printerEnabled = data.enabled;
-      updatePrinterButton();
+      const p = printerMap.get(data.printerId);
+      if (p) { p.enabled = data.enabled; renderFilterBar(); }
     }
   };
 }
 
-// --- Data ---
-function addReceipt(receipt) {
-  // Deduplicate
-  if (receipts.find(r => r.id === receipt.id)) return;
-  receipts.push(receipt);
-  document.getElementById('count').textContent = `(${receipts.length})`;
+// ── Data ──
+
+function addReceipt(printerId, receipt) {
+  const printer = printerMap.get(printerId);
+  if (!printer) return;
+  if (printer.receipts.find(r => r.id === receipt.id)) return;
+  printer.receipts.push(receipt);
+  renderFilterBar();
+  if (activeFilter !== 'all' && activeFilter !== printerId) return;
   renderList();
+  updateCount();
   if (autoSelect) {
     selectedId = receipt.id;
     readIds.add(receipt.id);
-    renderReceipt(receipt);
+    renderReceipt(receipt, printer);
     highlightActive();
   }
 }
 
-async function loadHistory() {
-  try {
-    const res = await fetch('/api/receipts');
-    const data = await res.json();
-    for (const r of data) {
-      readIds.add(r.id);
-      addReceipt(r);
-    }
-  } catch (e) { /* ignore */ }
+function updateCount() {
+  document.getElementById('count').textContent = '(' + getFilteredItems().length + ')';
 }
 
-async function clearAll() {
-  await fetch('/api/receipts', { method: 'DELETE' });
-  receipts.length = 0;
+function updateClearBtn() {
+  const btn = document.getElementById('clear-btn');
+  if (activeFilter === 'all') {
+    btn.textContent = 'Clear All';
+  } else {
+    const p = printerMap.get(activeFilter);
+    btn.textContent = p ? 'Clear ' + p.name : 'Clear';
+  }
+}
+
+async function clearReceipts() {
+  const targets = activeFilter === 'all' ? [...printerMap.values()] : [printerMap.get(activeFilter)].filter(Boolean);
+  for (const p of targets) {
+    await fetch('/api/printers/' + encodeURIComponent(p.id) + '/receipts', { method: 'DELETE' });
+    p.receipts = [];
+  }
   selectedId = null;
   autoSelect = true;
-  document.getElementById('count').textContent = '(0)';
+  renderFilterBar();
   renderList();
+  updateCount();
   document.getElementById('receipt-paper').innerHTML = '<div id="empty-state">Waiting for receipts...</div>';
+  clearOrigin();
 }
 
-// --- Rendering ---
+// ── Rendering ──
+
 function renderList() {
+  const items = getFilteredItems();
+  const showBadge = activeFilter === 'all';
   const list = document.getElementById('receipt-list');
   list.innerHTML = '';
-  for (let i = receipts.length - 1; i >= 0; i--) {
-    const r = receipts[i];
+  for (const { r, p } of items) {
     const isUnread = !readIds.has(r.id);
     const div = document.createElement('div');
     div.className = 'receipt-item' + (r.id === selectedId ? ' active' : '') + (isUnread ? ' unread' : '');
     div.dataset.id = r.id;
-    const time = new Date(r.receivedAt).toLocaleTimeString();
-    const preview = getPreviewText(r) || '(empty)';
-    div.innerHTML = `<div class="time">${time}</div><div class="preview">${escHtml(preview)}</div>`;
+    div.style.setProperty('--pc', p.color);
+
+    const timeRow = document.createElement('div');
+    timeRow.className = 'ri-time';
+
+    if (showBadge) {
+      const badge = document.createElement('span');
+      badge.className = 'pbadge';
+      badge.style.color = p.color;
+      badge.style.borderColor = p.color;
+      badge.style.background = p.color + '22';
+      badge.textContent = p.name.slice(0, 14);
+      timeRow.appendChild(badge);
+    }
+
+    const timeSpan = document.createElement('span');
+    timeSpan.textContent = new Date(r.receivedAt).toLocaleTimeString();
+    timeRow.appendChild(timeSpan);
+
+    const preview = document.createElement('div');
+    preview.className = 'ri-preview';
+    preview.textContent = getPreviewText(r) || '(empty)';
+
+    div.appendChild(timeRow);
+    div.appendChild(preview);
     div.onclick = () => {
       autoSelect = false;
       selectedId = r.id;
       readIds.add(r.id);
-      renderReceipt(r);
+      renderReceipt(r, p);
       highlightActive();
       renderList();
     };
@@ -189,14 +434,28 @@ function highlightActive() {
   });
 }
 
-function isBlankLine(line) {
-  const segs = line.segments || [];
-  if (segs.length === 0) return true;
-  return segs.every(s => !s.text || !s.text.trim());
-}
-
-function renderReceipt(receipt) {
+function renderReceipt(receipt, printer) {
   const paper = document.getElementById('receipt-paper');
+
+  // Update origin strip
+  if (printer) {
+    const origin = document.getElementById('receipt-origin');
+    origin.innerHTML = '';
+    const dot = document.createElement('span');
+    dot.className = 'ro-dot';
+    dot.style.background = printer.color;
+    const label = document.createElement('span');
+    label.style.color = printer.color;
+    label.textContent = printer.name;
+    const sep = document.createTextNode(' · ');
+    const time = document.createElement('span');
+    time.textContent = new Date(receipt.receivedAt).toLocaleTimeString();
+    origin.appendChild(dot);
+    origin.appendChild(label);
+    origin.appendChild(sep);
+    origin.appendChild(time);
+  }
+
   if (!receipt || !receipt.lines.length) {
     paper.innerHTML = '<div id="empty-state">Empty receipt</div>';
     return;
@@ -209,10 +468,9 @@ function renderReceipt(receipt) {
     div.className = 'line';
     if (line.align === 'center') div.classList.add('center');
     if (line.align === 'right') div.classList.add('right');
-
     const segments = line.segments || [];
     if (segments.length === 0 || (segments.length === 1 && !segments[0].text)) {
-      div.innerHTML = '\u00A0';
+      div.innerHTML = ' ';
     } else {
       for (const seg of segments) {
         const span = document.createElement('span');
@@ -232,57 +490,43 @@ function renderReceipt(receipt) {
   }
 }
 
+function clearOrigin() {
+  document.getElementById('receipt-origin').innerHTML = '';
+}
+
+function isBlankLine(line) {
+  const segs = line.segments || [];
+  if (segs.length === 0) return true;
+  return segs.every(s => !s.text || !s.text.trim());
+}
+
 function getPreviewText(receipt) {
   for (const line of receipt.lines) {
-    const segs = line.segments || [];
-    const text = segs.map(s => s.text).join('').trim();
+    const text = (line.segments || []).map(s => s.text).join('').trim();
     if (text) return text.slice(0, 30);
   }
   return '';
 }
 
-function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
 function onPaperReductionChange() {
-  const r = receipts.find(r => r.id === selectedId);
-  if (r) renderReceipt(r);
+  const entry = findReceiptEntry(selectedId);
+  if (entry) renderReceipt(entry.r, entry.p);
 }
 
-// --- Printer toggle ---
-function updatePrinterButton() {
-  const btn = document.getElementById('printer-toggle');
-  if (printerEnabled) {
-    btn.textContent = '🟢 Printer Online';
-    btn.classList.remove('printer-off');
-  } else {
-    btn.textContent = '🔴 Printer Offline';
-    btn.classList.add('printer-off');
-  }
-}
+// ── Printer toggle (per printer, from tab) ──
 
-async function togglePrinter() {
+async function togglePrinter(printerId) {
   try {
-    const res = await fetch('/api/printer/toggle', { method: 'POST' });
+    const res = await fetch('/api/printers/' + encodeURIComponent(printerId) + '/toggle', { method: 'POST' });
     const data = await res.json();
-    printerEnabled = data.enabled;
-    updatePrinterButton();
-  } catch (e) { /* ignore */ }
+    const p = printerMap.get(printerId);
+    if (p) p.enabled = data.enabled;
+    renderFilterBar();
+  } catch(e) { /* ignore */ }
 }
 
-async function loadPrinterStatus() {
-  try {
-    const res = await fetch('/api/printer/status');
-    const data = await res.json();
-    printerEnabled = data.enabled;
-    updatePrinterButton();
-  } catch (e) { /* ignore */ }
-}
-
-// --- Init ---
-loadHistory();
-loadPrinterStatus();
+// ── Boot ──
+init();
 connect();
 </script>
 </body>
