@@ -171,6 +171,7 @@ Lines with ESC $ positioning are forced to `align: 'left'` (spacing handles layo
 - **Position tracking**: Parser tracks `currentPosDots` to convert absolute dot positions into space-character padding
 - **Code tables**: bytes 0x80–0xFF are decoded with the table selected by `ESC t`; until one is selected (or when an unsupported one is), the ISO 8859-15 map applies — only 8 bytes differ from Latin-1 (0xA4=€, 0xA6=Š, etc.)
 - **Paper reduction**: HTML viewer has a toggle to hide whitespace-only lines (Dart lib emits `emptyLines()` between rows)
+- **Paper width**: the viewer paper is 48 Font A columns (576 dots) wide, so centering and right alignment land where they do on paper; Font B is drawn at 9/12 of Font A, GS ! height scales the font and a different width multiplier stretches the glyphs horizontally
 - **No image/barcode rendering**: GS v 0 and GS k are parsed/skipped, placeholder `[IMAGE]` emitted
 - **Graceful unknown command handling**: Logs warning, skips 1 byte for ESC prefix, immediate return for GS/FS — so GS commands with parameters must be listed explicitly, or their parameter bytes are printed as text
 
@@ -179,6 +180,7 @@ Lines with ESC $ positioning are forced to `align: 'left'` (spacing handles layo
 - Code pages outside `code-tables.ts` decode as ISO 8859-15
 - No bidirectional communication (DLE/ENQ status responses not implemented)
 - Images/barcodes/QR codes are skipped (not rendered)
+- Line spacing (ESC 3) is parsed but not applied to the preview
 - No cash drawer pulse emulation (ESC p parsed but no-op)
 - Italics (ESC 4/5) not implemented — likely deprecated in modern ESC/POS, not used by Epson TM series
 

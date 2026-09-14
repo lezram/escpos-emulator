@@ -102,7 +102,8 @@ body { font-family: system-ui, sans-serif; display: flex; height: 100vh; backgro
   background: #fff; color: #000; padding: 16px 1.5ch; min-height: 100px;
   box-shadow: 0 2px 16px rgba(0,0,0,0.4); border-radius: 2px;
   font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4;
-  overflow-x: hidden; width: fit-content;
+  /* 48 Font A columns: the 576 dot print area of an 80 mm printer, so centering lands where it does on paper */
+  overflow-x: hidden; width: 48ch; box-sizing: content-box;
 }
 #receipt-paper .line { min-height: 1.4em; display: flex; flex-wrap: nowrap; align-items: baseline; }
 #receipt-paper .line.center { justify-content: center; }
@@ -112,13 +113,9 @@ body { font-family: system-ui, sans-serif; display: flex; height: 100vh; backgro
 #receipt-paper .seg.underline-1 { text-decoration: underline; }
 #receipt-paper .seg.underline-2 { text-decoration: underline; text-decoration-style: double; }
 #receipt-paper .seg.reverse { background: #000; color: #fff; }
-#receipt-paper .seg.w2 { font-size: 26px; }
-#receipt-paper .seg.w3 { font-size: 39px; }
-#receipt-paper .seg.w4 { font-size: 52px; }
-#receipt-paper .seg.h2 { line-height: 2.8; }
-#receipt-paper .seg.h3 { line-height: 4.2; }
-#receipt-paper .seg.h4 { line-height: 5.6; }
-#receipt-paper .seg.font-B { font-size: 11px; }
+#receipt-paper .seg.scaled { line-height: 1.1; }
+#receipt-paper .seg.stretched, #receipt-paper .seg.stretch { display: inline-block; }
+#receipt-paper .seg.stretch { transform-origin: left; }
 
 #empty-state { color: #666; font-style: italic; padding: 40px; text-align: center; }
 
@@ -479,15 +476,42 @@ function renderReceipt(receipt, printer) {
         if (seg.underline === 1) span.classList.add('underline-1');
         if (seg.underline === 2) span.classList.add('underline-2');
         if (seg.reverse) span.classList.add('reverse');
-        if (seg.width > 1) span.classList.add('w' + Math.min(seg.width, 4));
-        if (seg.height > 1) span.classList.add('h' + Math.min(seg.height, 4));
-        if (seg.font === 'B') span.classList.add('font-B');
         span.textContent = seg.text;
+        applyCharacterSize(span, seg);
         div.appendChild(span);
       }
     }
     paper.appendChild(div);
   }
+}
+
+// Font B cells are 9 dots wide against the 12 of Font A, so 64 Font B columns fill the same paper as 48 Font A ones.
+const FONT_WIDTH_RATIO = { A: 1, B: 0.75 };
+// Courier advances 0.6em per character.
+const MONOSPACE_ADVANCE_EM = 0.6;
+
+// GS ! multiplies width and height independently (1-8): the font grows with the height, and when the width multiplier
+// is not the same the glyphs are stretched horizontally, inside a box as wide as the stretched text so the layout
+// follows.
+function applyCharacterSize(span, seg) {
+  const ratio = FONT_WIDTH_RATIO[seg.font] ?? 1;
+  const width = seg.width || 1;
+  const height = seg.height || 1;
+  if (ratio === 1 && width === 1 && height === 1) return;
+  span.style.fontSize = (ratio * height) + 'em';
+  if (height > 1) span.classList.add('scaled');
+  if (width === height) return;
+
+  const stretch = width / height;
+  const inner = document.createElement('span');
+  // text-decoration does not reach into an inline-block, so the inner box carries the styles too
+  inner.className = span.className + ' stretch';
+  inner.style.transform = `scaleX(${stretch})`;
+  inner.textContent = span.textContent;
+  span.textContent = '';
+  span.classList.add('stretched');
+  span.style.width = (seg.text.length * MONOSPACE_ADVANCE_EM * stretch) + 'em';
+  span.appendChild(inner);
 }
 
 function clearOrigin() {
