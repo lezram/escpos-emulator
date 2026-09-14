@@ -29,6 +29,7 @@ src/
 ├── printer-model.ts    # Printer hardware specs (fonts, paper width, DPI)
 ├── receipt.ts          # Data model: Receipt, ReceiptLine, TextSegment
 ├── escpos-parser.ts    # Core: byte-stream state machine → Receipt
+├── code-tables.ts      # Upper half (0x80–0xFF) of the code tables selectable with ESC t
 ├── receipt-store.ts    # In-memory store (max 100, EventEmitter)
 ├── tcp-server.ts       # net.Server on port 9100, one parser per connection
 ├── http-server.ts      # HTTP routes + WebSocket broadcast
@@ -74,7 +75,7 @@ Printable ASCII range: 0x20–0x7E. Bytes 0x80–0xFF decoded via active code pa
 | ESC E | 1B 45 n | Bold on (n&1) / off |
 | ESC M | 1B 4D n | Font select: 0=A, 1=B |
 | ESC a | 1B 61 n | Alignment: 0=left, 1=center, 2=right |
-| ESC t | 1B 74 n | Select code page |
+| ESC t | 1B 74 n | Select code page: 0, 2, 3, 4, 5, 16, 17, 18, 19, 40 (see `code-tables.ts`) |
 | GS ! | 1D 21 n | Size: width=(n>>4)+1, height=(n&0F)+1 |
 | GS V | 1D 56 m | Paper cut |
 | GS L / GS P / GS W | 1D 4C/50/57 + 2 bytes | Left margin / motion units / print area width — parameters consumed, no effect |
@@ -168,14 +169,14 @@ Lines with ESC $ positioning are forced to `align: 'left'` (spacing handles layo
 
 - **Segment-based lines**: A line can have multiple `TextSegment`s with different styles (needed for ESC $ column positioning within a line)
 - **Position tracking**: Parser tracks `currentPosDots` to convert absolute dot positions into space-character padding
-- **ISO 8859-15 map**: Only 8 bytes differ from Latin-1; hardcoded map for those positions (0xA4=€, 0xA6=Š, etc.)
+- **Code tables**: bytes 0x80–0xFF are decoded with the table selected by `ESC t`; until one is selected (or when an unsupported one is), the ISO 8859-15 map applies — only 8 bytes differ from Latin-1 (0xA4=€, 0xA6=Š, etc.)
 - **Paper reduction**: HTML viewer has a toggle to hide whitespace-only lines (Dart lib emits `emptyLines()` between rows)
 - **No image/barcode rendering**: GS v 0 and GS k are parsed/skipped, placeholder `[IMAGE]` emitted
 - **Graceful unknown command handling**: Logs warning, skips 1 byte for ESC prefix, immediate return for GS/FS — so GS commands with parameters must be listed explicitly, or their parameter bytes are printed as text
 
 ## Known Limitations
 
-- Only ISO 8859-15 code page fully mapped (code page 40). Other pages decode as Latin-1 fallback.
+- Code pages outside `code-tables.ts` decode as ISO 8859-15
 - No bidirectional communication (DLE/ENQ status responses not implemented)
 - Images/barcodes/QR codes are skipped (not rendered)
 - No cash drawer pulse emulation (ESC p parsed but no-op)

@@ -128,7 +128,7 @@ Replace `:id` with the printer `id` from the config.
 | ESC R | `1B 52 n` | International charset |
 | ESC a | `1B 61 n` | Justification (left/center/right) |
 | ESC d | `1B 64 n` | Feed n lines |
-| ESC t | `1B 74 n` | Select code table |
+| ESC t | `1B 74 n` | Select code table (0 PC437, 2 PC850, 3 PC860, 4 PC863, 5 PC865, 16 WPC1252, 17 PC866, 18 PC852, 19 PC858, 40 ISO 8859-15; ISO 8859-15 until one is selected) |
 | ESC p | `1B 70 m t1 t2` | Cash drawer pulse |
 | GS ! | `1D 21 n` | Character size (width/height multiplier) |
 | GS B | `1D 42 n` | Reverse print on/off |

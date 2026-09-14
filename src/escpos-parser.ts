@@ -1,4 +1,5 @@
 import { type PrinterModel } from './printer-model.js';
+import { CODE_TABLES } from './code-tables.js';
 import { type Alignment, type TextSegment, type ReceiptLine, createReceipt, type Receipt } from './receipt.js';
 
 // Control bytes
@@ -25,6 +26,7 @@ interface PrintState {
   width: number;
   height: number;
   reverse: boolean;
+  codeTable: number | null; // ESC t n; null until a supported table is selected, decoded as ISO 8859-15
 }
 
 export class EscPosParser {
@@ -58,6 +60,7 @@ export class EscPosParser {
       width: 1,
       height: 1,
       reverse: false,
+      codeTable: null,
     };
   }
 
@@ -111,7 +114,7 @@ export class EscPosParser {
 
         default:
           if (byte >= 0x20) {
-            this.currentText += ISO_8859_15_MAP[byte] ?? String.fromCharCode(byte);
+            this.currentText += this.decodeChar(byte);
             this.currentPosDots += this.charWidthDots;
           }
           break;
@@ -126,6 +129,13 @@ export class EscPosParser {
     if (this.lines.length > 0) {
       this.emitReceipt();
     }
+  }
+
+  private decodeChar(byte: number): string {
+    if (byte < 0x80) return String.fromCharCode(byte);
+    const table = this.state.codeTable !== null ? CODE_TABLES[this.state.codeTable] : undefined;
+    if (table) return table[byte - 0x80];
+    return ISO_8859_15_MAP[byte] ?? String.fromCharCode(byte);
   }
 
   private flushLine(): void {
@@ -265,7 +275,11 @@ export class EscPosParser {
           return true;
 
         case 0x74: // ESC t n — Select code table
-          this.commandHandler = this.readBytes(1, () => {});
+          this.commandHandler = this.readBytes(1, ([n]) => {
+            this.flushSegment();
+            if (!CODE_TABLES[n]) console.warn(`[escpos-parser] Unsupported code table: ${n}`);
+            this.state.codeTable = CODE_TABLES[n] ? n : null;
+          });
           return true;
 
         case 0x70: // ESC p m t1 t2 — Generate pulse (cash drawer)
