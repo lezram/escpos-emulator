@@ -37,6 +37,7 @@ interface PrintState {
   barcodeHeight: number;      // GS h n, dots
   hriPosition: number;        // GS H n, HRI_ABOVE | HRI_BELOW
   hriFont: string;            // GS f n
+  printAreaWidth: number;     // GS W nL nH, dots
 }
 
 export class EscPosParser {
@@ -75,7 +76,14 @@ export class EscPosParser {
       barcodeHeight: 162,
       hriPosition: 0,
       hriFont: 'A',
+      printAreaWidth: this.printableWidthDots,
     };
+  }
+
+  /** Width of the printable area in dots: a full line of Font A */
+  private get printableWidthDots(): number {
+    const font = this.model.fonts.A || this.model.fonts[this.model.defaultFont];
+    return font.charsPerLine * font.widthPx;
   }
 
   /** Width of one character in dots at current settings */
@@ -128,6 +136,10 @@ export class EscPosParser {
 
         default:
           if (byte >= 0x20) {
+            // A character that does not fit in the print area goes to the next line, as on paper
+            if (this.currentPosDots > 0 && this.currentPosDots + this.charWidthDots > this.state.printAreaWidth) {
+              this.flushLine();
+            }
             this.currentText += this.decodeChar(byte);
             this.currentPosDots += this.charWidthDots;
           }
@@ -181,6 +193,8 @@ export class EscPosParser {
   }
 
   private setAbsolutePosition(posDots: number): void {
+    // Positions outside the print area are ignored by the printer
+    if (posDots > this.state.printAreaWidth) return;
     this.flushSegment();
     this.lineUsedAbsPos = true;
     if (posDots > this.currentPosDots) {
@@ -203,7 +217,7 @@ export class EscPosParser {
 
   private emitReceipt(): void {
     if (this.lines.length === 0) return;
-    const receipt = createReceipt(this.lines);
+    const receipt = createReceipt(this.lines, this.state.printAreaWidth);
     this.lines = [];
     this.onReceipt(receipt);
   }
@@ -404,8 +418,15 @@ export class EscPosParser {
 
         case 0x4c: // GS L nL nH — Set left margin
         case 0x50: // GS P x y — Set horizontal and vertical motion units
-        case 0x57: // GS W nL nH — Set print area width
           this.commandHandler = this.readBytes(2, () => {});
+          return true;
+
+        case 0x57: // GS W nL nH — Set print area width
+          this.commandHandler = this.readBytes(2, ([nL, nH]) => {
+            // At least one character wide, and never past the printable area
+            const width = Math.max(nL + nH * 256, this.charWidthDots);
+            this.state.printAreaWidth = Math.min(width, this.printableWidthDots);
+          });
           return true;
 
         case 0x48: // GS H n — HRI position
@@ -533,6 +554,11 @@ export class EscPosParser {
     const code128 = system === CODE128 ? encodeCode128(data) : null;
     if (system === CODE128 && !code128) {
       console.warn('[escpos-parser] Invalid CODE128 data, barcode not printed');
+      return;
+    }
+    if (code128 && code128.modules.length * this.state.barcodeModuleWidth > this.state.printAreaWidth) {
+      console.warn(`[escpos-parser] CODE128 is ${code128.modules.length * this.state.barcodeModuleWidth} dots wide, `
+        + `past the ${this.state.printAreaWidth} dot print area: barcode not printed`);
       return;
     }
     const text = code128 ? code128.text : String.fromCharCode(...data);

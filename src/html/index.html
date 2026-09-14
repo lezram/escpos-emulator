@@ -102,7 +102,7 @@ body { font-family: system-ui, sans-serif; display: flex; height: 100vh; backgro
   background: #fff; color: #000; padding: 16px 1.5ch; min-height: 100px;
   box-shadow: 0 2px 16px rgba(0,0,0,0.4); border-radius: 2px;
   font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4;
-  /* 48 Font A columns: the 576 dot print area of an 80 mm printer, so centering lands where it does on paper */
+  /* 48 Font A columns (576 dots) until a receipt sets its own print area width, see renderReceipt */
   overflow-x: hidden; width: 48ch; box-sizing: content-box;
 }
 #receipt-paper .barcode { display: block; margin: 0.3em 0; }
@@ -455,9 +455,13 @@ function renderReceipt(receipt, printer) {
   }
 
   if (!receipt || !receipt.lines.length) {
+    paper.style.width = '';
     paper.innerHTML = '<div id="empty-state">Empty receipt</div>';
     return;
   }
+  // The paper is as wide as the print area (GS W): a Font A cell is 12 dots and one ch on screen, so centering and
+  // right alignment land where they do on paper
+  paper.style.width = receipt.printAreaDots ? (receipt.printAreaDots / DOTS_PER_FONT_A_CELL) + 'ch' : '';
   const paperReduction = document.getElementById('paper-reduction').checked;
   paper.innerHTML = '';
   for (const line of receipt.lines) {
@@ -492,6 +496,7 @@ function renderReceipt(receipt, printer) {
 const FONT_WIDTH_RATIO = { A: 1, B: 0.75 };
 // Courier advances 0.6em per character.
 const MONOSPACE_ADVANCE_EM = 0.6;
+const DOTS_PER_FONT_A_CELL = 12;
 
 // GS ! multiplies width and height independently (1-8): the font grows with the height, and when the width multiplier
 // is not the same the glyphs are stretched horizontally, inside a box as wide as the stretched text so the layout
@@ -518,7 +523,7 @@ function applyCharacterSize(span, seg) {
 }
 
 // A Font A cell is 12 dots wide and takes 0.6em on screen.
-const EM_PER_DOT = MONOSPACE_ADVANCE_EM / 12;
+const EM_PER_DOT = MONOSPACE_ADVANCE_EM / DOTS_PER_FONT_A_CELL;
 
 // Draws the barcode modules as they are printed: GS w dots per module, GS h dots high.
 function renderBarcode(barcode) {

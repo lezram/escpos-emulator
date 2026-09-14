@@ -79,10 +79,11 @@ Printable ASCII range: 0x20–0x7E. Bytes 0x80–0xFF decoded via active code pa
 | ESC t | 1B 74 n | Select code page: 0, 2, 3, 4, 5, 16, 17, 18, 19, 40 (see `code-tables.ts`) |
 | GS ! | 1D 21 n | Size: width=(n>>4)+1, height=(n&0F)+1 |
 | GS V | 1D 56 m | Paper cut |
-| GS k | 1D 6B m ... | Barcode: CODE128 (m=73) encoded into modules, other systems as HRI text only |
+| GS k | 1D 6B m ... | Barcode: CODE128 (m=73) encoded into modules, dropped with a warning when wider than the print area; other systems as HRI text only |
 | GS H / GS f | 1D 48 n / 1D 66 n | HRI position (bit 0 above, bit 1 below) / HRI font |
 | GS h / GS w | 1D 68 n / 1D 77 n | Barcode height / module width, in dots |
-| GS L / GS P / GS W | 1D 4C/50/57 + 2 bytes | Left margin / motion units / print area width — parameters consumed, no effect |
+| GS W | 1D 57 nL nH | Print area width in dots, clamped to the printable area; reset by ESC @ |
+| GS L / GS P | 1D 4C/50 + 2 bytes | Left margin / motion units — parameters consumed, no effect |
 
 ### How Column Layout Works (Dart esc_pos_utils_plus)
 
@@ -170,6 +171,7 @@ interface ReceiptLine {
 interface Receipt {
   id: string;          // UUID
   lines: ReceiptLine[];
+  printAreaDots: number; // GS W in force when the paper was cut (576 by default)
   receivedAt: string;  // ISO timestamp
 }
 ```
@@ -182,7 +184,8 @@ Lines with ESC $ positioning are forced to `align: 'left'` (spacing handles layo
 - **Position tracking**: Parser tracks `currentPosDots` to convert absolute dot positions into space-character padding
 - **Code tables**: bytes 0x80–0xFF are decoded with the table selected by `ESC t`; until one is selected (or when an unsupported one is), the ISO 8859-15 map applies — only 8 bytes differ from Latin-1 (0xA4=€, 0xA6=Š, etc.)
 - **Paper reduction**: HTML viewer has a toggle to hide whitespace-only lines (Dart lib emits `emptyLines()` between rows)
-- **Paper width**: the viewer paper is 48 Font A columns (576 dots) wide, so centering and right alignment land where they do on paper; Font B is drawn at 9/12 of Font A, GS ! height scales the font and a different width multiplier stretches the glyphs horizontally
+- **Print area**: the parser tracks the GS W print area (default: a full Font A line of the model, 576 dots) in dots — a character that does not fit goes to the next line, ESC $ positions past it are ignored, and each receipt carries it as `printAreaDots`
+- **Paper width**: the viewer paper is `printAreaDots / 12` ch wide (one Font A cell = 12 dots = 1ch), so a 58 mm layout (GS W 420) previews at 35 columns and centering lands where it does on paper; Font B is drawn at 9/12 of Font A, GS ! height scales the font and a different width multiplier stretches the glyphs horizontally
 - **Barcodes**: CODE128 is encoded in the parser and drawn by the viewer as an SVG at 0.05em per dot (the scale of a 12-dot Font A cell), with HRI text as ordinary lines above/below; no image rendering, GS v 0 emits a `[IMAGE]` placeholder
 - **Graceful unknown command handling**: Logs warning, skips 1 byte for ESC prefix, immediate return for GS/FS — so GS commands with parameters must be listed explicitly, or their parameter bytes are printed as text
 

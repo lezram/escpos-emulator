@@ -28,13 +28,15 @@ export interface ReceiptLine {
 export interface Receipt {
   id: string;
   lines: ReceiptLine[];
+  printAreaDots: number; // print area width (GS W) in force when the paper was cut
   receivedAt: string; // ISO timestamp
 }
 
-export function createReceipt(lines: ReceiptLine[]): Receipt {
+export function createReceipt(lines: ReceiptLine[], printAreaDots: number): Receipt {
   return {
     id: randomUUID(),
     lines,
+    printAreaDots,
     receivedAt: new Date().toISOString(),
   };
 }
