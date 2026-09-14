@@ -77,6 +77,7 @@ Printable ASCII range: 0x20–0x7E. Bytes 0x80–0xFF decoded via active code pa
 | ESC t | 1B 74 n | Select code page |
 | GS ! | 1D 21 n | Size: width=(n>>4)+1, height=(n&0F)+1 |
 | GS V | 1D 56 m | Paper cut |
+| GS L / GS P / GS W | 1D 4C/50/57 + 2 bytes | Left margin / motion units / print area width — parameters consumed, no effect |
 
 ### How Column Layout Works (Dart esc_pos_utils_plus)
 
@@ -170,7 +171,7 @@ Lines with ESC $ positioning are forced to `align: 'left'` (spacing handles layo
 - **ISO 8859-15 map**: Only 8 bytes differ from Latin-1; hardcoded map for those positions (0xA4=€, 0xA6=Š, etc.)
 - **Paper reduction**: HTML viewer has a toggle to hide whitespace-only lines (Dart lib emits `emptyLines()` between rows)
 - **No image/barcode rendering**: GS v 0 and GS k are parsed/skipped, placeholder `[IMAGE]` emitted
-- **Graceful unknown command handling**: Logs warning, skips 1 byte for ESC prefix, immediate return for GS/FS
+- **Graceful unknown command handling**: Logs warning, skips 1 byte for ESC prefix, immediate return for GS/FS — so GS commands with parameters must be listed explicitly, or their parameter bytes are printed as text
 
 ## Known Limitations
 

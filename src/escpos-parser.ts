@@ -374,6 +374,12 @@ export class EscPosParser {
           this.commandHandler = this.handleGsBarcode();
           return true;
 
+        case 0x4c: // GS L nL nH — Set left margin
+        case 0x50: // GS P x y — Set horizontal and vertical motion units
+        case 0x57: // GS W nL nH — Set print area width
+          this.commandHandler = this.readBytes(2, () => {});
+          return true;
+
         case 0x48: // GS H n — HRI position
         case 0x68: // GS h n — Barcode height
         case 0x77: // GS w n — Barcode width

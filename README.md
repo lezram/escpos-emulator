@@ -133,6 +133,9 @@ Replace `:id` with the printer `id` from the config.
 | GS ! | `1D 21 n` | Character size (width/height multiplier) |
 | GS B | `1D 42 n` | Reverse print on/off |
 | GS V | `1D 56 m` | Paper cut |
+| GS L | `1D 4C nL nH` | Left margin (skipped) |
+| GS P | `1D 50 x y` | Motion units (skipped) |
+| GS W | `1D 57 nL nH` | Print area width (skipped) |
 | GS v 0 | `1D 76 30 ...` | Raster bit image (skipped) |
 | GS ( k | `1D 28 6B ...` | 2D codes / QR (skipped) |
 | GS k | `1D 6B m ...` | Barcode (skipped) |
