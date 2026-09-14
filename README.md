@@ -138,7 +138,11 @@ Replace `:id` with the printer `id` from the config.
 | GS W | `1D 57 nL nH` | Print area width (skipped) |
 | GS v 0 | `1D 76 30 ...` | Raster bit image (skipped) |
 | GS ( k | `1D 28 6B ...` | 2D codes / QR (skipped) |
-| GS k | `1D 6B m ...` | Barcode (skipped) |
+| GS k | `1D 6B m ...` | Barcode: CODE128 (`m` = 73) is drawn; other symbologies show their data as text |
+| GS H | `1D 48 n` | Barcode HRI position (none/above/below/both) |
+| GS f | `1D 66 n` | Barcode HRI font |
+| GS h | `1D 68 n` | Barcode height |
+| GS w | `1D 77 n` | Barcode module width |
 
 Unsupported commands are gracefully skipped with a console warning.
 

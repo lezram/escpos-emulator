@@ -27,9 +27,10 @@ Environment: `TCP_PORT=9100`, `HTTP_PORT=3000`, `PRINTER_MODEL=TM-M30III`
 src/
 ├── index.ts            # Entry point, reads env config
 ├── printer-model.ts    # Printer hardware specs (fonts, paper width, DPI)
-├── receipt.ts          # Data model: Receipt, ReceiptLine, TextSegment
+├── receipt.ts          # Data model: Receipt, ReceiptLine, TextSegment, Barcode
 ├── escpos-parser.ts    # Core: byte-stream state machine → Receipt
 ├── code-tables.ts      # Upper half (0x80–0xFF) of the code tables selectable with ESC t
+├── code128.ts          # CODE128 encoder for GS k 73 data ({A/{B/{C code sets) → bar modules
 ├── receipt-store.ts    # In-memory store (max 100, EventEmitter)
 ├── tcp-server.ts       # net.Server on port 9100, one parser per connection
 ├── http-server.ts      # HTTP routes + WebSocket broadcast
@@ -78,6 +79,9 @@ Printable ASCII range: 0x20–0x7E. Bytes 0x80–0xFF decoded via active code pa
 | ESC t | 1B 74 n | Select code page: 0, 2, 3, 4, 5, 16, 17, 18, 19, 40 (see `code-tables.ts`) |
 | GS ! | 1D 21 n | Size: width=(n>>4)+1, height=(n&0F)+1 |
 | GS V | 1D 56 m | Paper cut |
+| GS k | 1D 6B m ... | Barcode: CODE128 (m=73) encoded into modules, other systems as HRI text only |
+| GS H / GS f | 1D 48 n / 1D 66 n | HRI position (bit 0 above, bit 1 below) / HRI font |
+| GS h / GS w | 1D 68 n / 1D 77 n | Barcode height / module width, in dots |
 | GS L / GS P / GS W | 1D 4C/50/57 + 2 bytes | Left margin / motion units / print area width — parameters consumed, no effect |
 
 ### How Column Layout Works (Dart esc_pos_utils_plus)
@@ -151,9 +155,16 @@ interface TextSegment {
   reverse: boolean;
 }
 
+interface Barcode {
+  modules: string;          // one char per module: '1' bar, '0' space
+  moduleWidthDots: number;  // GS w
+  heightDots: number;       // GS h
+}
+
 interface ReceiptLine {
-  segments: TextSegment[];
+  segments: TextSegment[];  // empty on a barcode line
   align: 'left' | 'center' | 'right';
+  barcode?: Barcode;
 }
 
 interface Receipt {
@@ -172,14 +183,14 @@ Lines with ESC $ positioning are forced to `align: 'left'` (spacing handles layo
 - **Code tables**: bytes 0x80–0xFF are decoded with the table selected by `ESC t`; until one is selected (or when an unsupported one is), the ISO 8859-15 map applies — only 8 bytes differ from Latin-1 (0xA4=€, 0xA6=Š, etc.)
 - **Paper reduction**: HTML viewer has a toggle to hide whitespace-only lines (Dart lib emits `emptyLines()` between rows)
 - **Paper width**: the viewer paper is 48 Font A columns (576 dots) wide, so centering and right alignment land where they do on paper; Font B is drawn at 9/12 of Font A, GS ! height scales the font and a different width multiplier stretches the glyphs horizontally
-- **No image/barcode rendering**: GS v 0 and GS k are parsed/skipped, placeholder `[IMAGE]` emitted
+- **Barcodes**: CODE128 is encoded in the parser and drawn by the viewer as an SVG at 0.05em per dot (the scale of a 12-dot Font A cell), with HRI text as ordinary lines above/below; no image rendering, GS v 0 emits a `[IMAGE]` placeholder
 - **Graceful unknown command handling**: Logs warning, skips 1 byte for ESC prefix, immediate return for GS/FS — so GS commands with parameters must be listed explicitly, or their parameter bytes are printed as text
 
 ## Known Limitations
 
 - Code pages outside `code-tables.ts` decode as ISO 8859-15
 - No bidirectional communication (DLE/ENQ status responses not implemented)
-- Images/barcodes/QR codes are skipped (not rendered)
+- Images and QR codes are skipped (not rendered); barcodes other than CODE128 show their data only
 - Line spacing (ESC 3) is parsed but not applied to the preview
 - No cash drawer pulse emulation (ESC p parsed but no-op)
 - Italics (ESC 4/5) not implemented — likely deprecated in modern ESC/POS, not used by Epson TM series

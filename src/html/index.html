@@ -105,6 +105,7 @@ body { font-family: system-ui, sans-serif; display: flex; height: 100vh; backgro
   /* 48 Font A columns: the 576 dot print area of an 80 mm printer, so centering lands where it does on paper */
   overflow-x: hidden; width: 48ch; box-sizing: content-box;
 }
+#receipt-paper .barcode { display: block; margin: 0.3em 0; }
 #receipt-paper .line { min-height: 1.4em; display: flex; flex-wrap: nowrap; align-items: baseline; }
 #receipt-paper .line.center { justify-content: center; }
 #receipt-paper .line.right { justify-content: flex-end; }
@@ -466,7 +467,9 @@ function renderReceipt(receipt, printer) {
     if (line.align === 'center') div.classList.add('center');
     if (line.align === 'right') div.classList.add('right');
     const segments = line.segments || [];
-    if (segments.length === 0 || (segments.length === 1 && !segments[0].text)) {
+    if (line.barcode) {
+      div.appendChild(renderBarcode(line.barcode));
+    } else if (segments.length === 0 || (segments.length === 1 && !segments[0].text)) {
       div.innerHTML = ' ';
     } else {
       for (const seg of segments) {
@@ -514,11 +517,40 @@ function applyCharacterSize(span, seg) {
   span.appendChild(inner);
 }
 
+// A Font A cell is 12 dots wide and takes 0.6em on screen.
+const EM_PER_DOT = MONOSPACE_ADVANCE_EM / 12;
+
+// Draws the barcode modules as they are printed: GS w dots per module, GS h dots high.
+function renderBarcode(barcode) {
+  const svgNs = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNs, 'svg');
+  const widthDots = barcode.modules.length * barcode.moduleWidthDots;
+  svg.setAttribute('class', 'barcode');
+  svg.setAttribute('viewBox', `0 0 ${widthDots} ${barcode.heightDots}`);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.style.width = (widthDots * EM_PER_DOT) + 'em';
+  svg.style.height = (barcode.heightDots * EM_PER_DOT) + 'em';
+  let d = '';
+  for (let i = 0; i < barcode.modules.length;) {
+    if (barcode.modules[i] !== '1') { i++; continue; }
+    let run = 1;
+    while (barcode.modules[i + run] === '1') run++;
+    d += `M${i * barcode.moduleWidthDots} 0h${run * barcode.moduleWidthDots}v${barcode.heightDots}h-${run * barcode.moduleWidthDots}z`;
+    i += run;
+  }
+  const path = document.createElementNS(svgNs, 'path');
+  path.setAttribute('d', d);
+  path.setAttribute('fill', '#000');
+  svg.appendChild(path);
+  return svg;
+}
+
 function clearOrigin() {
   document.getElementById('receipt-origin').innerHTML = '';
 }
 
 function isBlankLine(line) {
+  if (line.barcode) return false;
   const segs = line.segments || [];
   if (segs.length === 0) return true;
   return segs.every(s => !s.text || !s.text.trim());
