@@ -1,4 +1,6 @@
 import { type PrinterModel } from './printer-model.js';
+import { CODE_TABLES } from './code-tables.js';
+import { encodeCode128 } from './code128.js';
 import { type Alignment, type TextSegment, type ReceiptLine, createReceipt, type Receipt } from './receipt.js';
 
 // Control bytes
@@ -8,6 +10,11 @@ const HT = 0x09;
 const ESC = 0x1b;
 const FS = 0x1c;
 const GS = 0x1d;
+
+// GS k barcode system (format 2) and GS H bits
+const CODE128 = 73;
+const HRI_ABOVE = 0x01;
+const HRI_BELOW = 0x02;
 
 // ISO 8859-15 differs from 8859-1 at these byte positions
 const ISO_8859_15_MAP: Record<number, string> = {
@@ -25,6 +32,12 @@ interface PrintState {
   width: number;
   height: number;
   reverse: boolean;
+  codeTable: number | null; // ESC t n; null until a supported table is selected, decoded as ISO 8859-15
+  barcodeModuleWidth: number; // GS w n, dots
+  barcodeHeight: number;      // GS h n, dots
+  hriPosition: number;        // GS H n, HRI_ABOVE | HRI_BELOW
+  hriFont: string;            // GS f n
+  printAreaWidth: number;     // GS W nL nH, dots
 }
 
 export class EscPosParser {
@@ -58,7 +71,19 @@ export class EscPosParser {
       width: 1,
       height: 1,
       reverse: false,
+      codeTable: null,
+      barcodeModuleWidth: 3,
+      barcodeHeight: 162,
+      hriPosition: 0,
+      hriFont: 'A',
+      printAreaWidth: this.printableWidthDots,
     };
+  }
+
+  /** Width of the printable area in dots: a full line of Font A */
+  private get printableWidthDots(): number {
+    const font = this.model.fonts.A || this.model.fonts[this.model.defaultFont];
+    return font.charsPerLine * font.widthPx;
   }
 
   /** Width of one character in dots at current settings */
@@ -111,7 +136,11 @@ export class EscPosParser {
 
         default:
           if (byte >= 0x20) {
-            this.currentText += ISO_8859_15_MAP[byte] ?? String.fromCharCode(byte);
+            // A character that does not fit in the print area goes to the next line, as on paper
+            if (this.currentPosDots > 0 && this.currentPosDots + this.charWidthDots > this.state.printAreaWidth) {
+              this.flushLine();
+            }
+            this.currentText += this.decodeChar(byte);
             this.currentPosDots += this.charWidthDots;
           }
           break;
@@ -126,6 +155,13 @@ export class EscPosParser {
     if (this.lines.length > 0) {
       this.emitReceipt();
     }
+  }
+
+  private decodeChar(byte: number): string {
+    if (byte < 0x80) return String.fromCharCode(byte);
+    const table = this.state.codeTable !== null ? CODE_TABLES[this.state.codeTable] : undefined;
+    if (table) return table[byte - 0x80];
+    return ISO_8859_15_MAP[byte] ?? String.fromCharCode(byte);
   }
 
   private flushLine(): void {
@@ -157,6 +193,8 @@ export class EscPosParser {
   }
 
   private setAbsolutePosition(posDots: number): void {
+    // Positions outside the print area are ignored by the printer
+    if (posDots > this.state.printAreaWidth) return;
     this.flushSegment();
     this.lineUsedAbsPos = true;
     if (posDots > this.currentPosDots) {
@@ -179,7 +217,7 @@ export class EscPosParser {
 
   private emitReceipt(): void {
     if (this.lines.length === 0) return;
-    const receipt = createReceipt(this.lines);
+    const receipt = createReceipt(this.lines, this.state.printAreaWidth);
     this.lines = [];
     this.onReceipt(receipt);
   }
@@ -265,7 +303,11 @@ export class EscPosParser {
           return true;
 
         case 0x74: // ESC t n — Select code table
-          this.commandHandler = this.readBytes(1, () => {});
+          this.commandHandler = this.readBytes(1, ([n]) => {
+            this.flushSegment();
+            if (!CODE_TABLES[n]) console.warn(`[escpos-parser] Unsupported code table: ${n}`);
+            this.state.codeTable = CODE_TABLES[n] ? n : null;
+          });
           return true;
 
         case 0x70: // ESC p m t1 t2 — Generate pulse (cash drawer)
@@ -374,11 +416,41 @@ export class EscPosParser {
           this.commandHandler = this.handleGsBarcode();
           return true;
 
+        case 0x4c: // GS L nL nH — Set left margin
+        case 0x50: // GS P x y — Set horizontal and vertical motion units
+          this.commandHandler = this.readBytes(2, () => {});
+          return true;
+
+        case 0x57: // GS W nL nH — Set print area width
+          this.commandHandler = this.readBytes(2, ([nL, nH]) => {
+            // At least one character wide, and never past the printable area
+            const width = Math.max(nL + nH * 256, this.charWidthDots);
+            this.state.printAreaWidth = Math.min(width, this.printableWidthDots);
+          });
+          return true;
+
         case 0x48: // GS H n — HRI position
+          this.commandHandler = this.readBytes(1, ([n]) => {
+            this.state.hriPosition = (n >= 48 ? n - 48 : n) & (HRI_ABOVE | HRI_BELOW);
+          });
+          return true;
+
         case 0x68: // GS h n — Barcode height
+          this.commandHandler = this.readBytes(1, ([n]) => {
+            if (n > 0) this.state.barcodeHeight = n;
+          });
+          return true;
+
         case 0x77: // GS w n — Barcode width
+          this.commandHandler = this.readBytes(1, ([n]) => {
+            if (n > 0) this.state.barcodeModuleWidth = n;
+          });
+          return true;
+
         case 0x66: // GS f n — HRI font
-          this.commandHandler = this.readBytes(1, () => {});
+          this.commandHandler = this.readBytes(1, ([n]) => {
+            this.state.hriFont = (n === 1 || n === 49) ? 'B' : 'A';
+          });
           return true;
 
         default:
@@ -438,24 +510,78 @@ export class EscPosParser {
     return (byte: number): boolean => {
       if (m === -1) {
         m = byte;
-        this.commandHandler = m >= 65 ? this.readBarcodeLengthPrefixed() : this.readUntilNull();
+        const system = m;
+        const print = (data: number[]) => this.printBarcode(system, data);
+        this.commandHandler = m >= 65 ? this.readBarcodeLengthPrefixed(print) : this.readUntilNull(print);
         return true;
       }
       return true;
     };
   }
 
-  private readBarcodeLengthPrefixed(): (byte: number) => boolean {
+  private readBarcodeLengthPrefixed(onData: (data: number[]) => void): (byte: number) => boolean {
     let len = -1;
-    let read = 0;
+    const data: number[] = [];
     return (byte: number): boolean => {
-      if (len === -1) { len = byte; return len === 0; }
-      return ++read >= len;
+      if (len === -1) {
+        len = byte;
+        if (len === 0) onData(data);
+        return len === 0;
+      }
+      data.push(byte);
+      if (data.length >= len) { onData(data); return true; }
+      return false;
     };
   }
 
-  private readUntilNull(): (byte: number) => boolean {
-    return (byte: number): boolean => byte === 0x00;
+  private readUntilNull(onData: (data: number[]) => void): (byte: number) => boolean {
+    const data: number[] = [];
+    return (byte: number): boolean => {
+      if (byte === 0x00) { onData(data); return true; }
+      data.push(byte);
+      return false;
+    };
+  }
+
+  /**
+   * Prints the barcode on lines of its own, in the current justification, with the HRI text above and/or below it as
+   * GS H asks. CODE128 is drawn module by module, at the module width and height set with GS w and GS h; the other
+   * symbologies are not encoded and show their data only.
+   */
+  private printBarcode(system: number, data: number[]): void {
+    if (this.currentText.length > 0 || this.lineSegments.length > 0) this.flushLine();
+
+    const code128 = system === CODE128 ? encodeCode128(data) : null;
+    if (system === CODE128 && !code128) {
+      console.warn('[escpos-parser] Invalid CODE128 data, barcode not printed');
+      return;
+    }
+    if (code128 && code128.modules.length * this.state.barcodeModuleWidth > this.state.printAreaWidth) {
+      console.warn(`[escpos-parser] CODE128 is ${code128.modules.length * this.state.barcodeModuleWidth} dots wide, `
+        + `past the ${this.state.printAreaWidth} dot print area: barcode not printed`);
+      return;
+    }
+    const text = code128 ? code128.text : String.fromCharCode(...data);
+    const hriLine = (): ReceiptLine => ({
+      segments: [{ text, bold: false, underline: 0, font: this.state.hriFont, width: 1, height: 1, reverse: false }],
+      align: this.state.align,
+    });
+
+    if (this.state.hriPosition & HRI_ABOVE) this.lines.push(hriLine());
+    if (code128) {
+      this.lines.push({
+        segments: [],
+        align: this.state.align,
+        barcode: {
+          modules: code128.modules,
+          moduleWidthDots: this.state.barcodeModuleWidth,
+          heightDots: this.state.barcodeHeight,
+        },
+      });
+    } else {
+      console.warn(`[escpos-parser] Barcode system ${system} not rendered, showing its data only`);
+    }
+    if ((this.state.hriPosition & HRI_BELOW) || !code128) this.lines.push(hriLine());
   }
 
   private readBytes(count: number, fn: (bytes: number[]) => void): (byte: number) => boolean {

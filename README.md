@@ -128,14 +128,21 @@ Replace `:id` with the printer `id` from the config.
 | ESC R | `1B 52 n` | International charset |
 | ESC a | `1B 61 n` | Justification (left/center/right) |
 | ESC d | `1B 64 n` | Feed n lines |
-| ESC t | `1B 74 n` | Select code table |
+| ESC t | `1B 74 n` | Select code table (0 PC437, 2 PC850, 3 PC860, 4 PC863, 5 PC865, 16 WPC1252, 17 PC866, 18 PC852, 19 PC858, 40 ISO 8859-15; ISO 8859-15 until one is selected) |
 | ESC p | `1B 70 m t1 t2` | Cash drawer pulse |
 | GS ! | `1D 21 n` | Character size (width/height multiplier) |
 | GS B | `1D 42 n` | Reverse print on/off |
 | GS V | `1D 56 m` | Paper cut |
+| GS L | `1D 4C nL nH` | Left margin (skipped) |
+| GS P | `1D 50 x y` | Motion units (skipped) |
+| GS W | `1D 57 nL nH` | Print area width: sets the paper width in the preview, text wraps at it |
 | GS v 0 | `1D 76 30 ...` | Raster bit image (skipped) |
 | GS ( k | `1D 28 6B ...` | 2D codes / QR (skipped) |
-| GS k | `1D 6B m ...` | Barcode (skipped) |
+| GS k | `1D 6B m ...` | Barcode: CODE128 (`m` = 73) is drawn, and not printed when wider than the print area; other symbologies show their data as text |
+| GS H | `1D 48 n` | Barcode HRI position (none/above/below/both) |
+| GS f | `1D 66 n` | Barcode HRI font |
+| GS h | `1D 68 n` | Barcode height |
+| GS w | `1D 77 n` | Barcode module width |
 
 Unsupported commands are gracefully skipped with a console warning.
 
