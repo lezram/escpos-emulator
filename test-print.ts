@@ -20,6 +20,11 @@ function text(str: string): Buffer {
   return Buffer.from(str, 'latin1');
 }
 
+// GS k 73 n d1...dn: CODE128, the data starts with a {A / {B / {C code set selector
+function code128(data: Buffer): Buffer {
+  return Buffer.concat([cmd(GS, 0x6b, 73, data.length), data]);
+}
+
 const socket = net.createConnection({ host: HOST, port: PORT }, () => {
   console.log(`Connected to ${HOST}:${PORT}`);
 
@@ -80,7 +85,7 @@ const socket = net.createConnection({ host: HOST, port: PORT }, () => {
   send(cmd(ESC, 0x24, 0, 0));        // Position 0
   send(cmd(ESC, 0x45, 1));           // Bold ON
   send(text('Total'));
-  send(cmd(ESC, 0x24, 230, 1));      // Position 486
+  send(cmd(ESC, 0x24, 176, 1));      // Position 432: 6 double width chars (144 dots) end at 576
   send(cmd(GS, 0x21, 0x10));         // Double width
   send(text('13.30'), Buffer.from([0xa4]));
   send(cmd(GS, 0x21, 0x00));
@@ -94,6 +99,17 @@ const socket = net.createConnection({ host: HOST, port: PORT }, () => {
   send(text('Thank you!'), cmd(LF));
   send(cmd(ESC, 0x2d, 0));           // Underline OFF
   send(text('Visit us again'), cmd(LF));
+
+  // --- Barcodes (CODE128, centered, HRI below) ---
+  send(cmd(GS, 0x48, 2));            // HRI below the barcode
+  send(cmd(GS, 0x66, 0));            // HRI font A
+  send(cmd(GS, 0x68, 60));           // Height: 60 dots
+  send(cmd(GS, 0x77, 2));            // Module width: 2 dots
+  send(code128(text('{BCAFE-123')), cmd(LF));                               // Code set B: "CAFE-123"
+  send(code128(Buffer.concat([text('{C'), cmd(12, 34, 56, 78)])), cmd(LF)); // Code set C, one byte per digit pair: "12345678"
+  send(code128(Buffer.concat([text('{BNo.{C'), cmd(20, 26)])), cmd(LF));   // Switch from B to C: "No.2026"
+  send(cmd(GS, 0x77, 3));            // Module width: 3 dots
+  send(code128(text('{BABCDEFGHIJKLMNOP')), cmd(LF));                       // 211 modules x 3 = 633 dots, wider than 576: not printed
 
   // Feed and cut
   send(cmd(ESC, 0x64, 3));           // Feed 3 lines
